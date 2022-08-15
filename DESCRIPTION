@@ -1,0 +1,28 @@
+Package: primEnrich
+Title: Simple workflow for gene set enrichment, inspired by monkeys.
+Version: 1.0
+Authors@R: 
+    person(given = "Kenneth",
+           family = "Chiou",
+           role = c("aut", "cre"),
+           email = "chiou@asu.edu",
+           comment = c(ORCID = "0000-0001-7247-4107"))
+Description: Provides a simple workflow for conducting gene set enrichment analyses (GSEA) and other common enrichment tests. Tests are agnostic to gene set versions or annotations, but utility functions are provided for downloading annotations (focusing on Ensembl genes) or building them from scratch. Additionally, wrappers for running enrichment tests in topGO are also provided.
+License: CC BY 4.0
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.1.1
+Imports:
+	parallel,
+	biomaRt,
+	topGO
+Suggests:
+    GO.db,
+    KEGGREST,
+    rbioapi,
+    knitr,
+    rmarkdown
+Depends: 
+    R (>= 2.10)
+VignetteBuilder: knitr

@@ -1,0 +1,206 @@
+---
+title: "Introduction"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Introduction}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This package provides simplified workflows for conducting enrichment tests in R. It was inspired by my work with "model-adjacent" primate species for which many genome annotation resources exist but many are also lacking. After coding certain tasks over and over, I realized it was worthwhile to package everything into a streamlined workflow.
+
+This repository and package was developed for myself, but I provide it here in the hopes that it can help others too.
+
+## Installation
+
+To install, run the following.
+
+```{r eval=FALSE}
+devtools::install_github('kchiou/primEnrich')
+```
+
+The package can then be loaded as follows.
+
+```{r}
+library(primEnrich)
+```
+
+## Quick start (TLDR)
+
+Enrichment tests are essentially a two-step process. The first step requires building an annotation, which is essentially a data structure representing relationships between genes and descriptors (such as pathways, diseases, or other functional categories). The second step involves iterating over each functional category and running statistical tests.
+
+primEnrich simplifies these processes greatly. To start, let's simulate an example dataset. We'll set the seed beforehand to ensure replicability.
+
+```{r eval=FALSE}
+data('humanGO',package='primEnrich')            # Use included dataset
+
+set.seed(42)
+significant.genes = sample(names(humanGO),1000) # Randomly sample 1000 genes
+background.genes = names(humanGO)               # Also save background genes
+```
+
+Running an enrichment test is then as simple as
+
+```{r eval=FALSE}
+simple.fisher.results = primEnrich(
+	significant.genes,
+	annotation = humanGO,
+	background = background.genes,
+	statistic = 'fisher')
+```
+
+## Running analysis
+
+The example above used all GO (Gene Ontology) annotations, combining annotations from multiple ontologies (i.e., biological processes, molecular functions, and cellular components). This may not be desirable. This can be easily rectified by subsetting the annotation and rerunning the enrichment using the slimmed annotation.
+
+
+First, let's take a look at the pathway metadata using `getDefinitions()`.
+```{r eval=FALSE}
+pathway.metadata = getDefinitions(humanGO)
+
+head(pathway.metadata,3)
+
+#   pathway_id                           pathway_name pathway_namespace
+# 1 GO:0000002       mitochondrial genome maintenance                BP
+# 2 GO:0000003                           reproduction                BP
+# 3 GO:0000009 alpha-1,6-mannosyltransferase activity                MF
+```
+
+Next, subset to only biological processes and rerun the enrichment.
+
+```{r eval=FALSE}
+humanBP = subset(humanGO,pathway_namespace == 'BP')
+
+simple.fisher.results2 = primEnrich(
+	significant.genes,
+	annotation = humanBP,
+	background = background.genes,
+	statistic = 'fisher')
+```
+
+The `primEnrich()` function is simple by design, but in some cases (particularly with GO), it is desirable to run a more sophisticated method that takes into account the complicated hierarchical relationships among terms. For GO, primEnrich offers functions that make running topGO extremely easy.
+
+```{r eval=FALSE}
+topgo.fisher.results = topgoFisher(
+	significant.genes,
+	annotation = humanBP,
+	background = background.genes,
+	algorithm = 'weight01')
+```
+
+The previous examples are examples of "overrepresentation" tests that test whether genes of interest are linked to pathways at higher proportions than expected by chance. The other major category of enrichment tests test continuous distributions of values instead. topGO provides the Kolmogorov-Smirnov (KS) test for this purpose. To run it, we can first simulate another example dataset (say, a vector of p values).
+
+```{r eval=FALSE}
+set.seed(42)
+test.values = runif(length(humanGO))       # Simulate p values
+names(test.values) = names(humanGO)        # Set the names to gene names
+```
+
+Now KS tests can be run just as easily.
+
+```{r eval=FALSE}
+topgo.ks.results = topgoKS(
+	test.values,
+	alternative = 'less',                  # Set to "less" to test for low p values. 
+	annotation = humanBP,
+	algorithm = 'weight01')
+```
+
+By editing the "statistic" argument in primEnrich, a simple enrichment test is also easy to run.
+
+```{r eval=FALSE}
+simple.ks.results = primEnrich(
+	test.values,
+	alternative = 'less',                  # Set to "less" to test for low p values.
+	statistic = 'ks',
+	annotation = humanBP)
+```
+
+## Working with annotations
+
+Thus far, the examples have worked with prepackaged annotations. Building your own annotations, however, is extremely easy using a few useful tools. `fetchAnnotations()` can be used to download and build updated annotations from select databases including GO, KEGG, PANTHER, DISEASES, DisGeNET, and IID.
+
+This function works largely off of ENSEMBL annotations. When other annotations are provided using other gene identifiers, mappings from ENSEMBL are used to link genes to pathways. Therefore, the organisms/genomes that are used for genes and for pathways should match as closely as possible. As an example, KEGG annotations can be fetched for the mouse genome as follows.
+
+First, it is helpful to lookup a list of organisms using `fetchOrganisms()`.
+
+```{r eval=FALSE}
+ensembl.organisms = fetchOrganisms('ENSEMBL')
+
+kegg.organisms = fetchOrganisms('KEGG')
+
+head(ensembl.organisms,3)
+#          org_code                      dataset                           description     version
+# 1 abrachyrhynchus abrachyrhynchus_gene_ensembl Pink-footed goose genes (ASM259213v1) ASM259213v1
+# 2     acalliptera     acalliptera_gene_ensembl      Eastern happy genes (fAstCal1.2)  fAstCal1.2
+# 3   acarolinensis   acarolinensis_gene_ensembl       Green anole genes (AnoCar2.0v2) AnoCar2.0v2
+
+head(kegg.organisms,3)
+#   org_code      t_id                                 description
+# 1      hin gn:T00001 Haemophilus influenzae Rd KW20 (serotype d)
+# 2      mge gn:T00002                   Mycoplasma genitalium G37
+# 3      mja gn:T00003      Methanocaldococcus jannaschii DSM 2661
+```
+
+This helpfully helped us determine that the mouse has the 'mmusculus` and `mmu` codes for ENSEMBL and KEGG, respectively. We can now use this to fetch KEGG annotations
+
+```{r eval=FALSE}
+# Fetch macaque Gene Ontology annotations
+mouseKEGG = fetchAnnotations(
+	database = 'KEGG',
+	ensembl.species = 'mmusculus',
+	kegg.species = 'mmu')
+```
+
+In many cases, particularly for nonmodel organisms, annotations might not be available for a species of interest and must be "lifted over". In these cases, the best practice is to pick a high-quality annotation for the genome evolutionarily closest to your species of interest.
+
+For this example, however, we'll convert the annotation above to the rhesus macaque genome using `liftAnnotations()`. The function relies on ENSEMBL's orthology annotations. By default, non-single-copy orthologs are excluded, but this can be modified using the `orthology.type` argument.
+
+```{r eval=FALSE}
+# Fetch macaque Gene Ontology annotations
+mouse2macaqueKEGG = liftAnnotations(
+	annotation = mouseKEGG,               # Annotation (query species)
+	ensembl.species = 'mmulatta',         # Target species
+	orthology.type = 'ortholog_one2one')  # Only single-copy orthologs
+```
+
+As with all annotation, this dataset is now ready for analysis!
+
+## Building custom annotations
+
+The annotations above have thus far all used the `pathwayAnnotation` class, which bundles the critical components of an annotation for quick and easy analysis. All of the statistical tests in this package, however, do not strictly require annotations to be in this format. Instead, annotations should be provided as a named list, where the names are genes and each component of the list is a vector of pathway IDs associated with the gene. Additionally, pathway metadata should be provided as a data frame, where the first two columns are `pathway_id` and `pathway_name` (additional columns are allowed and will be added to the results if detected).
+
+The syntax for running tests in this manner is as follows. Since the necessary components are already found as part of `pathwayAnnotation` objects, we'll first extract them from the last annotation used above.
+
+```{r eval=FALSE}
+annotationList = getAnnotationsList(mouse2macaqueKEGG)
+pathwayMetadata = getDefinitions(mouse2macaqueKEGG)
+
+simple.ks.results = primEnrich(
+	test.values,
+	alternative = 'less',                  # Set to "less" to test for low p values.
+	statistic = 'ks',
+	annotation = annotationList,
+	definition = pathwayMetadata)
+```
+
+It is also quite straightforward to package custom annotations into `pathwayAnnotation` objects. New pathway annotation objects can be created as follows
+
+```{r eval=FALSE}
+newAnnotation = createPathwayAnnotationObject(
+	database = 'KEGG',
+	annotation = annotationList,
+	definition = pathwayMetadata,
+	organism = 'mmulatta',
+	ensembl.version = getGenesVersion(mouse2macaqueKEGG),
+	annotation.version = getAnnotationsVersion(mouse2macaqueKEGG))
+```
+
+That's it!
