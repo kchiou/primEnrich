@@ -13,6 +13,9 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
+Depends:
+    R (>= 3.3.0)
+biocViews:
 Imports:
 	parallel,
 	biomaRt,
@@ -23,6 +26,4 @@ Suggests:
     rbioapi,
     knitr,
     rmarkdown
-Depends: 
-    R (>= 2.10)
 VignetteBuilder: knitr
