@@ -216,8 +216,8 @@ fetchAnnotations = function(
 
 		kegg.lookup = kegg.genes[entrez.kegg]
 
-		kegg.pathways = KEGGREST::keggLink('pathway','mcc')
-		# kegg.ko = KEGGREST::keggLink('ko','mcc')
+		kegg.pathways = KEGGREST::keggLink('pathway',kegg.species)
+		# kegg.ko = KEGGREST::keggLink('ko',kegg.species)
 		
 		kegg.pathway.info = unlist(strsplit(KEGGREST::keggInfo('pathway'),'\\n'))
 		kegg.pathway.version = gsub('^path +','',kegg.pathway.info[grep('^path +Release',kegg.pathway.info)])
