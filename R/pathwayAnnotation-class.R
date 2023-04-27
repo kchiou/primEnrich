@@ -34,7 +34,7 @@ setMethod(
 			expr = eval(call('bquote', expr, enclos))
 			eval(expr, envir, enclos)
 		}
-		i = safe_eval(substitute(expr), x@definition, parent.frame(), ...)
+		i = safe_eval(substitute(expr), x@definition, baseenv(), ...)
 		if (all(i)) x else x[,i]
     }
 )
