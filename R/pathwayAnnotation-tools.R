@@ -649,8 +649,8 @@ liftAnnotations = function(
 		ensembl.version = subset(biomaRt::listEnsemblArchives(),version == ensembl.version)$name
 	}
 	
-	ens.genes = biomaRt::getBM(
-		attributes=c(
+	ens.attr = biomaRt::listAttributes(ens)
+	good.attr = intersect(ens.attr$name,c(
 			'ensembl_gene_id',
 			paste0(to.species,'_homolog_ensembl_gene'),
 			paste0(to.species,'_homolog_orthology_type'),
@@ -659,7 +659,10 @@ liftAnnotations = function(
 			paste0(to.species,'_homolog_goc_score'),
 			paste0(to.species,'_homolog_wga_coverage'),
 			paste0(to.species,'_homolog_orthology_confidence')
-		),
+		)
+	)
+	ens.genes = biomaRt::getBM(
+		attributes=good.attr,
 		mart = ens)
 	
 	ens.genes = ens.genes[!is.na(ens.genes[[paste0(to.species,'_homolog_ensembl_gene')]]) & as.logical(nchar(ens.genes[[paste0(to.species,'_homolog_ensembl_gene')]])),]
@@ -683,29 +686,49 @@ liftAnnotations = function(
 		stop('Error')
 	}
 	if (!is.null(percent.identity.1)) {
-		filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_perc_id')]]) & ens.genes[[paste0(to.species,'_homolog_perc_id')]] >= percent.identity.1
-		message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where percent identity < ',percent.identity.1,'% (',to.species,' query to ',from.species,' target).'))
-		ens.genes = ens.genes[filter.genes,]
+		if (paste0(to.species,'_homolog_perc_id') %in% good.attr) {
+			filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_perc_id')]]) & ens.genes[[paste0(to.species,'_homolog_perc_id')]] >= percent.identity.1
+			message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where percent identity < ',percent.identity.1,'% (',to.species,' query to ',from.species,' target).'))
+			ens.genes = ens.genes[filter.genes,]
+		} else {
+			warning(paste0('Not filtering on "percent.identity.1" as attribute "',paste0(to.species,'_homolog_perc_id'),'" is not available via bioMart.'))
+		}
 	}
 	if (!is.null(percent.identity.2)) {
-		filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_perc_id_r1')]]) & ens.genes[[paste0(to.species,'_homolog_perc_id_r1')]] >= percent.identity.2
-		message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where percent identity < ',percent.identity.2,'% (',from.species,' target to ',to.species,' query).'))
-		ens.genes = ens.genes[filter.genes,]
+		if (paste0(to.species,'_homolog_perc_id_r1') %in% good.attr) {
+			filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_perc_id_r1')]]) & ens.genes[[paste0(to.species,'_homolog_perc_id_r1')]] >= percent.identity.2
+			message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where percent identity < ',percent.identity.2,'% (',from.species,' target to ',to.species,' query).'))
+			ens.genes = ens.genes[filter.genes,]
+		} else {
+			warning(paste0('Not filtering on "percent.identity.2" as attribute "',paste0(to.species,'_homolog_perc_id_r1'),'" is not available via bioMart.'))
+		}
 	}
 	if (!is.null(goc.score)) {
-		filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_goc_score')]]) & ens.genes[[paste0(to.species,'_homolog_goc_score')]] >= goc.score
-		message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where gene-order conservation score < ',goc.score,'%.'))
-		ens.genes = ens.genes[filter.genes,]
+		if (paste0(to.species,'_homolog_goc_score') %in% good.attr) {
+			filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_goc_score')]]) & ens.genes[[paste0(to.species,'_homolog_goc_score')]] >= goc.score
+			message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where gene-order conservation score < ',goc.score,'%.'))
+			ens.genes = ens.genes[filter.genes,]
+		} else {
+			warning(paste0('Not filtering on "goc.score" as attribute "',paste0(to.species,'_homolog_goc_score'),'" is not available via bioMart.'))
+		}
 	}
 	if (!is.null(wga.coverage)) {
-		filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_wga_coverage')]]) & ens.genes[[paste0(to.species,'_homolog_wga_coverage')]] >= wga.coverage
-		message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where whole-genome alignment coverage < ',wga.coverage,'%.'))
-		ens.genes = ens.genes[filter.genes,]
+		if (paste0(to.species,'_homolog_wga_coverage') %in% good.attr) {
+			filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_wga_coverage')]]) & ens.genes[[paste0(to.species,'_homolog_wga_coverage')]] >= wga.coverage
+			message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where whole-genome alignment coverage < ',wga.coverage,'%.'))
+			ens.genes = ens.genes[filter.genes,]
+		} else {
+			warning(paste0('Not filtering on "wga.coverage" as attribute "',paste0(to.species,'_homolog_wga_coverage'),'" is not available via bioMart.'))
+		}
 	}
 	if (!is.null(orthology.confidence)) {
-		filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_orthology_confidence')]]) & ens.genes[[paste0(to.species,'_homolog_orthology_confidence')]] >= orthology.confidence
-		message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where orthology confidence < ',orthology.confidence,'.'))
-		ens.genes = ens.genes[filter.genes,]
+		if (paste0(to.species,'_homolog_orthology_confidence') %in% good.attr) {
+			filter.genes = !is.na(ens.genes[[paste0(to.species,'_homolog_orthology_confidence')]]) & ens.genes[[paste0(to.species,'_homolog_orthology_confidence')]] >= orthology.confidence
+			message(paste0('Removing ',length(na.omit(unique(ens.genes[!filter.genes,paste0(to.species,'_homolog_ensembl_gene')]))),' target genes where orthology confidence < ',orthology.confidence,'.'))
+			ens.genes = ens.genes[filter.genes,]
+		} else {
+			warning(paste0('Not filtering on "orthology.confidence" as attribute "',paste0(to.species,'_homolog_orthology_confidence'),'" is not available via bioMart.'))
+		}
 	}
 	message('Matched ',length(unique(ens.genes[[paste0(to.species,'_homolog_ensembl_gene')]])),' target genes after filters.')
 	
