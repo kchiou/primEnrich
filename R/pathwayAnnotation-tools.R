@@ -272,7 +272,7 @@ fetchAnnotations = function(
 		
 		if (!class(panther.species) %in% c('integer','numeric')) {
 			organism.lookup = fetchOrganisms('PANTHER')
-			panther.species = as.numeric(subset(organism.lookup,org.code == panther.species)$taxon_id)
+			panther.species = as.numeric(subset(organism.lookup,org_code == panther.species)$taxon_id)
 		}
 		
 		parse.panther.results = function(x) {
