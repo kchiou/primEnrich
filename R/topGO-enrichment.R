@@ -149,7 +149,7 @@ topgoKS = function(       # Fisher's exact test with topGO
 	suppressPackageStartupMessages(require(topGO))
 	
 	if (class(annotation) == 'pathwayAnnotation') {
-		if (!grepl('^GO ',annotation@source)) warning('Slot "source" of pathwayAnnotation object should be "GO"')
+		if (!grepl('^GO *',annotation@source)) warning('Slot "source" of pathwayAnnotation object should be "GO"')
 		gene2go = annotation@annotation
 		definition = annotation@definition
 	} else {
