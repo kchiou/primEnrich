@@ -5,10 +5,11 @@
 \title{Retrieve current versions of annotations from online sources.}
 \usage{
 fetchAnnotations(
-  database = c("GO", "KEGG", "PANTHER", "DISEASES", "DisGeNET", "IID"),
+  database = c("GO", "KEGG", "PANTHER", "Reactome", "DISEASES", "DisGeNET", "IID"),
   ensembl.species = "hsapiens",
   kegg.species = "hsa",
   panther.species = "HUMAN",
+  reactome.species = "HSA",
   iid.species = "human",
   go.namespace = NULL,
   diseases.confidence = NULL,
@@ -26,13 +27,15 @@ fetchAnnotations(
 \arguments{
 \item{database}{A character string specifying the name of the annotation to retrieve. If multiple values are given, only the first is used. Valid values are \code{"GO"}, \code{"KEGG"}, \code{"PANTHER"}, \code{"DISEASES"}, \code{"DisGeNET"}, and \code{"IID"}.}
 
-\item{ensembl.species}{A character string specifying the organism for which genes (ENSEMBL) should be annotated. Valid values can be found using \code{fetchOrganisms("ENSEMBL")}.}
+\item{ensembl.species}{A character string specifying the organism for which genes (ENSEMBL) should be annotated. Valid values can be found using \code{fetchOrganisms("ENSEMBL")$org_code}.}
 
-\item{kegg.species}{A character string specifying the organism from which to derive KEGG (Kyoto Encyclopedia of Genes and Genomes) annotations. Valid values can be found using \code{fetchOrganisms("KEGG")}. Used only when \code{database} is \code{"KEGG"}, ignored otherwise.}
+\item{kegg.species}{A character string specifying the organism from which to derive KEGG (Kyoto Encyclopedia of Genes and Genomes) annotations. Valid values can be found using \code{fetchOrganisms("KEGG")$org_code}. Used only when \code{database} is \code{"KEGG"}, ignored otherwise.}
 
-\item{panther.species}{A character string specifying the organism from which to derive PANTHER (Protein ANalysis THrough Evolutionary Relationships) annotations. Valid values can be found using \code{fetchOrganisms("PANTHER")}. Used only when \code{database} is \code{"PANTHER"}, ignored otherwise.}
+\item{panther.species}{A character string specifying the organism from which to derive PANTHER (Protein ANalysis THrough Evolutionary Relationships) annotations. Valid values can be found using \code{fetchOrganisms("PANTHER")$org_code}. Used only when \code{database} is \code{"PANTHER"}, ignored otherwise.}
 
-\item{iid.species}{A character string specifying the organism from which to derive IID (Integrated Interactions Database) annotations. Valid values can be found using \code{fetchOrganisms("IID")}. Used only when \code{database} is \code{"IID"}, ignored otherwise.}
+\item{reactome.species}{A character string specifying the organism from which to derive Reactome annotations. Valid values can be found using \code{fetchOrganisms("Reactome")$org_code}. Used only when \code{database} is \code{"Reactome"}, ignored otherwise.}
+
+\item{iid.species}{A character string specifying the organism from which to derive IID (Integrated Interactions Database) annotations. Valid values can be found using \code{fetchOrganisms("IID")$org_code}. Used only when \code{database} is \code{"IID"}, ignored otherwise.}
 
 \item{go.namespace}{A character string specifying the namespace for which to limit GO (Gene Ontology) annotations. Must be one or more of \code{"BP"}, \code{"CC"}, or \code{"MF"}. Used only when \code{database} is \code{"GO"}, ignored otherwise.}
 

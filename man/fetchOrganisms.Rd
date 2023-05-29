@@ -5,7 +5,7 @@
 \title{Look up valid organism codes}
 \usage{
 fetchOrganisms(
-  database = c("ENSEMBL", "KEGG", "PANTHER", "DISEASES", "DisGeNET", "IID")
+  database = c("ENSEMBL", "KEGG", "PANTHER", "Reactome", "DISEASES", "DisGeNET", "IID")
 )
 }
 \arguments{

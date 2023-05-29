@@ -193,11 +193,11 @@ createPathwayAnnotationObject = function(
 	new(
 		'pathwayAnnotation',
 		source = database[1],
-		organism = organism[1],
+		organism = if (is.null(organism)) '' else organism[1],
 		annotation = annotation,
 		definition = definition,
-		ensembl_genes_version = ensembl.version[1],
-		pathway_annotation_version = annotation.version[1]
+		ensembl_genes_version = if (is.null(ensembl.version)) '' else ensembl.version[1],
+		pathway_annotation_version = if (is.null(annotation.version)) '' else annotation.version[1]
 	)
 }
 

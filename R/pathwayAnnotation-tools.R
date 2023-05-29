@@ -18,11 +18,11 @@
 #' @return A data frame containing an `org_code` column and additional metadata.
 #' @export
 fetchOrganisms = function(
-	database=c('ENSEMBL','KEGG','PANTHER','DISEASES','DisGeNET','IID')
+	database=c('ENSEMBL','KEGG','PANTHER','Reactome','DISEASES','DisGeNET','IID')
 ) {
 	database = database[1]
 	
-	if (database == 'ENSEMBL') {
+	if (toupper(database) == 'ENSEMBL') {
 		# suppressPackageStartupMessages(require(biomaRt))
 		
 		ens = biomaRt::useEnsembl(biomart='ENSEMBL_MART_ENSEMBL')
@@ -31,7 +31,7 @@ fetchOrganisms = function(
 			org_code = gsub('_gene_ensembl$','',org.metadata$dataset),
 			org.metadata
 		)
-	} else if (database == 'KEGG') {
+	} else if (toupper(database) == 'KEGG') {
 		# suppressPackageStartupMessages(require(KEGGREST))
 		
 		genome.list = KEGGREST::keggList('genome')
@@ -41,19 +41,26 @@ fetchOrganisms = function(
 			org_code = gsub('^([a-z]+); .*','\\1',genome.list),
 			t_id = names(genome.list),
 			description = gsub('^[a-z]+; ','',genome.list))
-	} else if (database == 'PANTHER') {
+	} else if (toupper(database) == 'PANTHER') {
 		# suppressPackageStartupMessages(require(rbioapi))
 		
-		org.metadata = rbioapi::rba_panther_info(what='organisms')
+		org.metadata = rbioapi::rba_panther_info(what='organisms',verbose=FALSE)
 		org.metadata = data.frame(
 			org_code = org.metadata$short_name,
 			org.metadata)
-	} else if (database %in% c('DISEASES','DisGeNET')) {		
+	} else if (toupper(database) == 'REACTOME') {
+		# suppressPackageStartupMessages(require(rbioapi))
+		
+		org.metadata = rbioapi::rba_reactome_species(only_main=TRUE,verbose=FALSE)
+		org.metadata = data.frame(
+			org_code = org.metadata$abbreviation,
+			org.metadata)
+	} else if (toupper(database) %in% c('DISEASES','DISGENET')) {		
 		org.metadata = data.frame(
 			org_code = 'hsapiens',
 			short_name = 'human',
 			long_name = 'Homo sapiens')
-	} else if (database == 'IID') {
+	} else if (toupper(database) == 'IID') {
 		org.list = c(human='Homo sapiens',fly='Drosophila melanogaster',mouse='Mus musculus',rat='Rattus norvegicus',worm='Caenorhabditis elegans',yeast='Saccharomyces cerevisiae',alpaca='Vicugna alpaca',chicken='Gallus gallus',cat='Felis catus',cow='Bos taurus',dog='Canis familiaris',duck='Anas platyrhynchos',guinea_pig='Cavia porcellus',horse='Equus caballus',pig='Sus scrofa',rabbit='Oryctolagus cuniculus',sheep='Ovis aries',turkey='Meleagris gallopavo')
 		org.metadata = data.frame(
 			org_code = names(org.list),
@@ -71,10 +78,11 @@ fetchOrganisms = function(
 #' established databases and datasets. An internet connection is required.
 #' 
 #' @param database A character string specifying the name of the annotation to retrieve. If multiple values are given, only the first is used. Valid values are `"GO"`, `"KEGG"`, `"PANTHER"`, `"DISEASES"`, `"DisGeNET"`, and `"IID"`.
-#' @param ensembl.species A character string specifying the organism for which genes (ENSEMBL) should be annotated. Valid values can be found using `fetchOrganisms("ENSEMBL")`.
-#' @param kegg.species A character string specifying the organism from which to derive KEGG (Kyoto Encyclopedia of Genes and Genomes) annotations. Valid values can be found using `fetchOrganisms("KEGG")`. Used only when `database` is `"KEGG"`, ignored otherwise.
-#' @param panther.species A character string specifying the organism from which to derive PANTHER (Protein ANalysis THrough Evolutionary Relationships) annotations. Valid values can be found using `fetchOrganisms("PANTHER")`. Used only when `database` is `"PANTHER"`, ignored otherwise.
-#' @param iid.species A character string specifying the organism from which to derive IID (Integrated Interactions Database) annotations. Valid values can be found using `fetchOrganisms("IID")`. Used only when `database` is `"IID"`, ignored otherwise.
+#' @param ensembl.species A character string specifying the organism for which genes (ENSEMBL) should be annotated. Valid values can be found using `fetchOrganisms("ENSEMBL")$org_code`.
+#' @param kegg.species A character string specifying the organism from which to derive KEGG (Kyoto Encyclopedia of Genes and Genomes) annotations. Valid values can be found using `fetchOrganisms("KEGG")$org_code`. Used only when `database` is `"KEGG"`, ignored otherwise.
+#' @param panther.species A character string specifying the organism from which to derive PANTHER (Protein ANalysis THrough Evolutionary Relationships) annotations. Valid values can be found using `fetchOrganisms("PANTHER")$org_code`. Used only when `database` is `"PANTHER"`, ignored otherwise.
+#' @param reactome.species A character string specifying the organism from which to derive Reactome annotations. Valid values can be found using `fetchOrganisms("Reactome")$org_code`. Used only when `database` is `"Reactome"`, ignored otherwise.
+#' @param iid.species A character string specifying the organism from which to derive IID (Integrated Interactions Database) annotations. Valid values can be found using `fetchOrganisms("IID")$org_code`. Used only when `database` is `"IID"`, ignored otherwise.
 #' @param go.namespace A character string specifying the namespace for which to limit GO (Gene Ontology) annotations. Must be one or more of `"BP"`, `"CC"`, or `"MF"`. Used only when `database` is `"GO"`, ignored otherwise.
 #' @param diseases.confidence A number specifying the confidence score threshold (DISEASES database) for gene-disease associations to include. If `NULL`, no filter is applied. Used only when `database` is `"DISEASES"`, ignored otherwise.
 #' @param disgenet.class A character vector specifying one or more disease class(es) (MeSH codes, DisGeNET database) to include. If `"all"` or `NULL`, all classes are included. Used only when `database` is `"DisGeNET"`, ignored otherwise.
@@ -89,10 +97,11 @@ fetchOrganisms = function(
 #' @return An object of pathwayAnnotation class
 #' @export
 fetchAnnotations = function(
-	database=c('GO','KEGG','PANTHER','DISEASES','DisGeNET','IID'),
+	database=c('GO','KEGG','PANTHER','Reactome','DISEASES','DisGeNET','IID'),
 	ensembl.species = 'hsapiens',          # Supported codes in fetchOrganisms('ENSEMBL')
 	kegg.species = 'hsa',                  # Supported codes in fetchOrganisms('KEGG')
 	panther.species = 'HUMAN',             # Supported codes in fetchOrganisms('PANTHER')
+	reactome.species = 'HSA',              # Supported codes in fetchOrganisms('Reactome')
 	iid.species = 'human',                 # Supported codes in fetchOrganisms('IID')
 	go.namespace = NULL,
 	diseases.confidence = NULL,
@@ -127,8 +136,8 @@ fetchAnnotations = function(
 	database = database[1]
 	# if (!is.null(n.cores)) suppressPackageStartupMessages(require(parallel))
 	
-	if (!database %in% c('GO','KEGG','PANTHER','DISEASES','DisGeNET','IID')) {
-		stop('Argument database must be one of c("GO","KEGG","PANTHER","DISEASES","DisGeNET","IID")')
+	if (!toupper(database) %in% c('GO','KEGG','PANTHER','REACTOME','DISEASES','DISGENET','IID')) {
+		stop('Argument database must be one of c("GO","KEGG","PANTHER","Reactome","DISEASES","DisGeNET","IID")')
 	}
 	
 	if (toupper(database) == 'GO') {
@@ -285,7 +294,7 @@ fetchAnnotations = function(
 			}
 		}
 		
-		panther.pathway.version = subset(rbioapi::rba_panther_info('organisms'),taxon_id == panther.species)$version
+		panther.pathway.version = subset(rbioapi::rba_panther_info('organisms',verbose=FALSE),taxon_id == panther.species)$version
 		
 		genes.to.do = ens.genes$ensembl_gene_id
 		results.list = list()
@@ -323,6 +332,58 @@ fetchAnnotations = function(
 			definition = panther.info,
 			ensembl.version = ensembl.version,
 			annotation.version = panther.pathway.version
+		)
+	} else if (toupper(database) == 'REACTOME') {
+		database = 'Reactome'
+		# suppressPackageStartupMessages(require(rbioapi))
+		if (is.null(reactome.species)) stop('reactome.species must not be NULL')
+		
+		ens.genes = biomaRt::getBM(
+			attributes=c('ensembl_gene_id'),
+			mart = ens)
+
+		organism.lookup = fetchOrganisms('Reactome')
+		if (!class(reactome.species) %in% c('integer','numeric')) {
+			reactome.species = subset(organism.lookup,org_code == reactome.species)$displayName
+		} else {
+			reactome.species = subset(organism.lookup,dbId == reactome.species)$displayName
+		}
+		
+		temp.file = tempfile()
+		
+		download.file(paste0('https://reactome.org/download/current/Ensembl2Reactome_All_Levels.txt'),temp.file,quiet=TRUE,timeout=600)
+		reactome.all = read.delim(
+			temp.file,
+			header=FALSE,
+			col.names=c('id','stId','uri','displayName','evidence','taxon'))
+		
+		reactome.all = subset(reactome.all,taxon == reactome.species)
+		
+		reactome.pathway.version = paste('Reactome',rbioapi::rba_reactome_version(verbose=FALSE))
+		
+		reactome.all$reactome_gene_id = reactome.all$id
+		names(reactome.all)[2] = 'pathway_id'
+		names(reactome.all)[4] = 'pathway_name'
+		
+		reactome.all$pathway_id = gsub('-',':',reactome.all$pathway_id)
+
+		gene2react = if (is.null(n.cores)) {
+			lapply(split(reactome.all,reactome.all$reactome_gene_id),function(x) unique(x$pathway_id))
+		} else {
+			parallel::mclapply(split(reactome.all,reactome.all$reactome_gene_id),function(x) unique(x$pathway_id),mc.cores=n.cores)
+		}
+		
+		reactome.info = unique(reactome.all[c('pathway_id','pathway_name','uri')])
+		reactome.info = subset(reactome.info,pathway_id %in% unique(reactome.all$pathway_id))
+
+		rownames(reactome.info) = NULL
+		result = createPathwayAnnotationObject(
+			database = database,
+			organism = ensembl.species,
+			annotation = gene2react,
+			definition = reactome.info,
+			ensembl.version = ensembl.version,
+			annotation.version = reactome.pathway.version
 		)
 	} else if (toupper(database) == 'DISEASES') {
 		database = 'DISEASES'
@@ -762,4 +823,103 @@ liftAnnotations = function(
 			paste0(annotation@pathway_annotation_version,' (lifted from ',from.species,')')
 		}
 	)
+}
+
+#' Export an annotation into GMT (gene matrix transposed) file format.
+#'
+#' This function provides a workflow for exported an annotation as a GMT file. Exported files
+#' may be used with tools such as g:Profiler.
+#' 
+#' @param annotation An object of pathwayAnnotation class.
+#' @param description If character class, column (of definition object) from which to populate the optional description file. If `NULL`, the column will be populated with dummy ("na") values.
+#' @param file File path for exported GMT file.
+#' @param n.cores A number specifying the number of cores to use.
+#' @export
+
+exportGMT = function(
+	annotation,
+	description = 'pathway_name', # Column to populate the description of GMT file. Set to NULL if no description
+	file = 'annotation_export.gmt',
+	n.cores = NULL
+) {
+	if (!'pathwayAnnotation' %in% class(annotation)) stop('Annotation class must be "pathwayAnnotation"')
+	
+	annotation.list = getAnnotationsList(annotation)
+	if (is.null(n.cores)) {
+		annotation.df = do.call(rbind,lapply(names(annotation),function(x) {
+			data.frame(ensembl_gene_id = x, pathway_id = annotation.list[[x]])
+		}))
+	} else {
+		annotation.df = do.call(rbind,parallel::mclapply(names(annotation),function(x) {
+			data.frame(ensembl_gene_id = x, pathway_id = annotation.list[[x]])
+		},mc.cores=n.cores))
+	}
+	annotation.df = annotation.df[complete.cases(annotation.df),]
+	
+	if (is.null(description)) {
+		pathway.df = getDefinitions(annotation)['pathway_id']
+		pathway.df[['description']] = 'na'
+	} else {
+		pathway.df = getDefinitions(annotation)[c('pathway_id',description)]
+		names(pathway.df)[2] = 'description'
+	}
+	pathway.df = subset(pathway.df,pathway_id %in% annotation.df$pathway_id)
+	pathway.df = pathway.df[order(pathway.df$pathway_id),]
+	rownames(pathway.df) = pathway.df$pathway_id
+	
+	annotation.split = split(annotation.df,annotation.df$pathway_id)
+	if (is.null(n.cores)) {
+		gmt.out = unlist(lapply(pathway.df$pathway_id,function(x) {
+			out = c(unlist(pathway.df[x,]),annotation.split[[x]]$ensembl_gene_id)
+			names(out) = NULL
+			paste(out,collapse='\t')
+		}))
+	} else {
+		gmt.out = unlist(parallel::mclapply(pathway.df$pathway_id,function(x) {
+			out = c(unlist(pathway.df[x,]),annotation.split[[x]]$ensembl_gene_id)
+			names(out) = NULL
+			paste(out,collapse='\t')
+		},mc.cores=n.cores))
+	}
+	write(gmt.out,file=file,sep='\n')
+}
+
+#' Import an annotation from GMT (gene matrix transposed) file format.
+#'
+#' This function provides a workflow for importing an annotation as a GMT file.
+#' 
+#' @param file File path for GMT file.
+#' @param database Name of the annotation source.
+#' @param organism Name of the organism. It is advisable to use ENSEMBL codes, which can be retrieved using `fetchOrganisms('ENSEMBL')`.
+#' @param n.cores A number specifying the number of cores to use.
+#' @param ... Additional arguments to be passed to `createPathwayAnnotationObject`.
+#' @export
+
+importGMT = function(
+	file,
+	database,
+	organism,
+	n.cores = NULL,
+	...
+) {
+	gmt.in = strsplit(scan(file, what='', sep='\n', quiet=TRUE),'\t')
+	if (is.null(n.cores)) {
+		gmt.df = do.call(rbind,lapply(gmt.in,function(x) {
+			data.frame(pathway_id = x[1], pathway_name = x[2], ensembl_gene_id = x[3:length(x)])
+		}))
+	} else {
+		gmt.df = do.call(rbind,parallel::mclapply(gmt.in,function(x) {
+			data.frame(pathway_id = x[1], pathway_name = x[2], ensembl_gene_id = x[3:length(x)])
+		},mc.cores=n.cores))
+	}
+	definition = unique(gmt.df[c('pathway_id','pathway_name')])
+	
+	gene2pathway = split(gmt.df$pathway_id,gmt.df$ensembl_gene_id)
+	
+	createPathwayAnnotationObject(
+		database = database,
+		annotation = gene2pathway,
+		definition = definition,
+		organism = organism,
+		...)
 }
