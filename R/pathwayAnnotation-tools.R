@@ -97,7 +97,7 @@ fetchOrganisms = function(
 #' @return An object of pathwayAnnotation class
 #' @export
 fetchAnnotations = function(
-	database=c('GO','KEGG','PANTHER','Reactome','DISEASES','DisGeNET','IID'),
+	database=c('GO','KEGG','PANTHER','Reactome','ReactomePPI','DISEASES','DisGeNET','IID'),
 	ensembl.species = 'hsapiens',          # Supported codes in fetchOrganisms('ENSEMBL')
 	kegg.species = 'hsa',                  # Supported codes in fetchOrganisms('KEGG')
 	panther.species = 'HUMAN',             # Supported codes in fetchOrganisms('PANTHER')
@@ -136,8 +136,8 @@ fetchAnnotations = function(
 	database = database[1]
 	# if (!is.null(n.cores)) suppressPackageStartupMessages(require(parallel))
 	
-	if (!toupper(database) %in% c('GO','KEGG','PANTHER','REACTOME','DISEASES','DISGENET','IID')) {
-		stop('Argument database must be one of c("GO","KEGG","PANTHER","Reactome","DISEASES","DisGeNET","IID")')
+	if (!toupper(database) %in% c('GO','KEGG','PANTHER','REACTOME','REACTOMEPPI','DISEASES','DISGENET','IID')) {
+		stop('Argument database must be one of c("GO","KEGG","PANTHER","Reactome","ReactomePPI","DISEASES","DisGeNET","IID")')
 	}
 	
 	if (toupper(database) == 'GO') {
@@ -528,6 +528,199 @@ fetchAnnotations = function(
 			definition = disgenet.info,
 			ensembl.version = ensembl.version,
 			annotation.version = disgenet.version
+		)
+	} else if (toupper(database) == 'REACTOMEPPI') {
+		database = 'ReactomePPI'
+		
+		temp.file = tempfile() # temp.file='human_annotated_PPIs.txt.gz'
+
+		if (reactome.species == 'HSA') {
+			download.file('https://reactome.org/download/current/interactors/reactome.homo_sapiens.interactions.tab-delimited.txt',temp.file,quiet=TRUE,timeout=600)
+		} else {
+			download.file('https://reactome.org/download/current/interactors/reactome.all_species.interactions.tab-delimited.txt',temp.file,quiet=TRUE,timeout=600)
+		}
+		reactomeppi.all = read.delim(
+			temp.file,
+			header=FALSE,
+			skip=1,
+			col.names=c('pathway1','ensembl1','entrez1','pathway2','ensembl2','entrez2','interaction_type','interaction_context','pubmed'))
+		reactomeppi.pathway.version = paste('Reactome',rbioapi::rba_reactome_version(verbose=FALSE))
+		
+		reactomeppi.original = reactomeppi.all
+		
+		reactomeppi.columns = c('pathway1','ensembl1','pathway2','ensembl2','interaction_type','interaction_context','pubmed')
+		reactomeppi.all = subset(reactomeppi.all,select=reactomeppi.columns)
+		
+		reactomeppi.all$interaction_id = unlist(lapply(1:nrow(reactomeppi.all),function(i) {
+			paste(sort(c(reactomeppi.all[i,'pathway1'],reactomeppi.all[i,'pathway2'])),collapse='|')
+		}))
+		
+		# Make mirror image, switching proteins in columns 1 and 2 (and flipping directionality in the meantime)
+		reactomeppi.dir1 = c('pathway1','ensembl2','interaction_type','interaction_context','pubmed')
+		reactomeppi.dir2 = c('pathway2','ensembl1','interaction_type','interaction_context','pubmed')
+
+		reactomeppi.duplicated = subset(reactomeppi.all,pathway1 == pathway2 & !duplicated(interaction_id),select=reactomeppi.dir1)
+		reactomeppi.unique = subset(reactomeppi.all,pathway1 != pathway2 & !duplicated(interaction_id))
+		
+		reactomeppi.1 = subset(reactomeppi.unique,select=reactomeppi.dir1)
+		reactomeppi.2 = subset(reactomeppi.unique,select=reactomeppi.dir2)
+		
+		names(reactomeppi.1) = names(reactomeppi.2) = names(reactomeppi.duplicated) = c('pathway_id','ensembl_id','interaction_type','interaction_context','pubmed')
+
+		reactomeppi.all = rbind(reactomeppi.duplicated,reactomeppi.1,reactomeppi.2)
+	
+		gene2reactomeppi.df = if (is.null(n.cores)) {
+			do.call(rbind,lapply(1:nrow(reactomeppi.all),function(i) {
+				x = reactomeppi.all[i,]
+				y = data.frame(
+					pathway_id = x$pathway_id,
+					ensembl_id = gsub('^ENSEMBL:','',unlist(strsplit(x$ensembl_id,'\\|'))),
+					x[c('interaction_type','interaction_context','pubmed')]
+				)
+				y
+			}))
+		} else {
+			do.call(rbind,parallel::mclapply(1:nrow(reactomeppi.all),function(i) {
+				x = reactomeppi.all[i,]
+				y = data.frame(
+					pathway_id = x$pathway_id,
+					ensembl_id = gsub('^ENSEMBL:','',unlist(strsplit(x$ensembl_id,'\\|'))),
+					x[c('interaction_type','interaction_context','pubmed')]
+				)
+				y
+			},mc.cores=n.cores))
+		}
+		
+		gene2reactomeppi.df$ensembl_id = gsub('\\.[0-9]+$','',gene2reactomeppi.df$ensembl_id)
+		
+		gene2reactomeppi.df = subset(
+			gene2reactomeppi.df,
+			grepl('^ENSG[0-9]{11}$|^ENST[0-9]{11}$|^ENSP[0-9]{11}$',ensembl_id)
+		)
+		
+		ens.genes = biomaRt::getBM(
+			attributes=c('ensembl_gene_id','ensembl_transcript_id','ensembl_peptide_id'),
+			mart = ens)
+		
+		ens.transcripts = subset(ens.genes,grepl('^ENST[0-9]{11}$',ensembl_transcript_id))
+		ens.peptides = subset(ens.genes,grepl('^ENSP[0-9]{11}$',ensembl_peptide_id))
+		
+		enst.to.ensg = ens.transcripts$ensembl_gene_id
+		names(enst.to.ensg) = ens.transcripts$ensembl_transcript_id
+		ensp.to.ensg = ens.peptides$ensembl_gene_id
+		names(ensp.to.ensg) = ens.peptides$ensembl_peptide_id
+		
+		gene2reactomeppi.df$ensembl_gene_id = with(gene2reactomeppi.df,ifelse(
+			grepl('^ENSG[0-9]{11}',ensembl_id),
+			ensembl_id,
+			ifelse(
+				grepl('^ENST[0-9]{11}',ensembl_id),
+				enst.to.ensg[ensembl_id],
+				ifelse(
+					grepl('^ENSP[0-9]{11}',ensembl_id),
+					ensp.to.ensg[ensembl_id],
+					''
+				)
+			)
+		))
+		gene2reactomeppi.df = unique(subset(gene2reactomeppi.df,select=c('pathway_id','ensembl_gene_id','interaction_type','interaction_context','pubmed')))
+				
+		reactomeppi.info = unique(gene2reactomeppi.df['pathway_id'])
+		# table(gsub(':.+','',reactomeppi.info$pathway_id))
+		
+		# uniprotkb
+		uniprot.names = UniProt.ws::mapUniProt(
+			from = 'UniProtKB_AC-ID',
+			to = 'Gene_Name',
+			query = unique(gsub('uniprotkb:','',subset(reactomeppi.info,grepl('uniprotkb',pathway_id))$pathway_id)),
+			verbose = FALSE
+		)
+		
+		uniprot.names = do.call(rbind,lapply(split(uniprot.names, uniprot.names$From),function(x) data.frame(uniprot_id = unique(x$From),name=paste(x$To,collapse='|'))))
+		
+		uniprot.to.name = uniprot.names$name
+		names(uniprot.to.name) = paste0('uniprotkb:',uniprot.names$uniprot_id)
+		
+		# reactome	
+		reactome.1 = subset(reactomeppi.original,grepl('^reactome:',pathway1),select=c('pathway1','ensembl1'))
+		reactome.2 = subset(reactomeppi.original,grepl('^reactome:',pathway2),select=c('pathway2','ensembl2'))
+		names(reactome.1) = names(reactome.2) = c('reactome_gene_id','ensembl')
+		reactome.names = subset(unique(rbind(reactome.1,reactome.2)),reactome_gene_id %in% reactomeppi.info$pathway_id)
+		
+		reactome.names$ensembl = gsub('ENSEMBL:','',reactome.names$ensembl)
+		reactome.names = subset(reactome.names,nchar(ensembl) > 1)
+
+		ens.gene.names = biomaRt::getBM(
+			attributes=c('ensembl_gene_id','external_gene_name'),
+			mart = ens)
+		genes.to.symbol = ens.gene.names$external_gene_name
+		names(genes.to.symbol) = ens.gene.names$ensembl_gene_id
+		
+		reactome.names$reactome_gene_name = genes.to.symbol[reactome.names$ensembl]
+		reactome.names = subset(reactome.names,!is.na(reactome.names$reactome_gene_name))
+		
+		reactome.to.name = reactome.names$reactome_gene_name
+		names(reactome.to.name) = reactome.names$reactome_gene_id
+		
+		# ChEBI
+		temp.file = tempfile()
+		download.file('https://ftp.ebi.ac.uk/pub/databases/chebi/Flat_file_tab_delimited/compounds.tsv.gz',temp.file,quiet=TRUE,timeout=600)
+		file.rename(temp.file,paste0(temp.file,'txt.gz'))
+		temp.file=paste0(temp.file,'txt.gz')
+		
+		chebi.compounds = data.table::fread(temp.file,data.table=FALSE)
+		names(chebi.compounds) = c('chebi_id','status','chebi_compound_id','source','parent_id','name','definition','modified','created','star')
+		
+		# chebi.compounds$chebi_compound_id = paste0('ChEBI:',format(chebi.compounds$chebi_compound_id,scientific=FALSE,trim=TRUE))
+		chebi.compounds$chebi_compound_id = gsub('CHEBI','ChEBI',chebi.compounds$chebi_compound_id)
+		
+		chebi.to.name = chebi.compounds$name
+		names(chebi.to.name) = chebi.compounds$chebi_compound_id
+		
+		chebi.to.description = gsub('^null$','',chebi.compounds$definition)
+		names(chebi.to.description) = chebi.compounds$chebi_compound_id
+		
+		# reactomeppi.info = subset(reactomeppi.info,
+		# 	pathway_id %in% c(names(uniprot.to.name),names(reactome.to.name),names(chebi.to.name))
+		# )
+		
+		reactomeppi.info$pathway_name = with(reactomeppi.info,ifelse(
+			grepl('^uniprotkb:',pathway_id),
+			uniprot.to.name[pathway_id],
+			ifelse(
+				grepl('^reactome:',pathway_id),
+				reactome.to.name[pathway_id],
+				ifelse(
+					grepl('^ChEBI:',pathway_id),
+					chebi.to.name[pathway_id],
+					''
+				)
+			)
+		))
+		reactomeppi.info$pathway_name[is.na(reactomeppi.info$pathway_name)] = reactomeppi.info$pathway_id[is.na(reactomeppi.info$pathway_name)]
+		reactomeppi.info$pathway_definition = with(reactomeppi.info,ifelse(
+			grepl('^ChEBI:',pathway_id),
+				chebi.to.description[pathway_id],
+				''
+			)
+		)
+				
+		gene2reactomeppi = if (is.null(n.cores)) {
+			lapply(split(gene2reactomeppi.df,gene2reactomeppi.df$ensembl_gene_id),function(x) unique(x$pathway_id))
+		} else {
+			parallel::mclapply(split(gene2reactomeppi.df,gene2reactomeppi.df$ensembl_gene_id),function(x) unique(x$pathway_id),mc.cores=n.cores)
+		}
+		
+		reactomeppi.info = subset(reactomeppi.info,pathway_id %in% unique(reactomeppi.all$pathway_id))
+		
+		rownames(reactomeppi.info) = NULL
+		result = createPathwayAnnotationObject(
+			database = database,
+			organism = ensembl.species,
+			annotation = gene2reactomeppi,
+			definition = reactomeppi.info,
+			ensembl.version = ensembl.version,
+			annotation.version = reactomeppi.pathway.version
 		)
 	} else if (toupper(database) %in% c('IID','PPI','OPHID')) {
 		database = 'IID'
