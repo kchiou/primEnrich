@@ -18,7 +18,7 @@
 #' @return A data frame containing an `org_code` column and additional metadata.
 #' @export
 fetchOrganisms = function(
-	database=c('ENSEMBL','KEGG','PANTHER','Reactome','DISEASES','DisGeNET','IID')
+	database=c('ENSEMBL','KEGG','PANTHER','MP','Reactome','DISEASES','DisGeNET','IID')
 ) {
 	database = database[1]
 	
@@ -48,6 +48,11 @@ fetchOrganisms = function(
 		org.metadata = data.frame(
 			org_code = org.metadata$short_name,
 			org.metadata)
+	} else if (toupper(database) == 'MP') {	
+		org.metadata = data.frame(
+			org_code = 'hsapiens',
+			short_name = 'human',
+			long_name = 'Homo sapiens')
 	} else if (toupper(database) == 'REACTOME') {
 		# suppressPackageStartupMessages(require(rbioapi))
 		
@@ -97,7 +102,7 @@ fetchOrganisms = function(
 #' @return An object of pathwayAnnotation class
 #' @export
 fetchAnnotations = function(
-	database=c('GO','KEGG','PANTHER','Reactome','ReactomePPI','DISEASES','DisGeNET','IID'),
+	database=c('GO','KEGG','PANTHER','MP','Reactome','ReactomePPI','DISEASES','DisGeNET','IID'),
 	ensembl.species = 'hsapiens',          # Supported codes in fetchOrganisms('ENSEMBL')
 	kegg.species = 'hsa',                  # Supported codes in fetchOrganisms('KEGG')
 	panther.species = 'HUMAN',             # Supported codes in fetchOrganisms('PANTHER')
@@ -269,6 +274,119 @@ fetchAnnotations = function(
 			definition = kegg.info,
 			ensembl.version = ensembl.version,
 			annotation.version = kegg.pathway.version
+		)
+	} else if (toupper(database) == 'MP') {
+		database = 'MP'
+
+		if (ensembl.species != 'hsapiens') {
+			warning('MP database is only available for human genome. Use liftAnnotation() to convert. Proceeding with organism "hsapiens".')
+			
+			# Ensembl version has already been set above
+			hsap = .getEnsemblVersion(ensembl.version,'hsapiens')
+			ensembl.species = 'hsapiens'
+		} else {
+			hsap = ens
+		}
+		
+		temp.file = tempfile()
+		download.file('https://www.informatics.jax.org/downloads/reports/HMD_HumanPhenotype.rpt',temp.file,quiet=TRUE,timeout=600)
+		mp.version = paste0('Downloaded ',`attr<-`(as.POSIXct(Sys.time()),'tzone','UTC'),' UTC')
+		
+		mp.scan = scan(temp.file,sep='\n',what='',quiet=TRUE)
+		mp.scan = mp.scan[grepl('MP:',mp.scan)]
+		# Strip white
+		mp.scan = gsub('\\t* *$','',mp.scan)
+		
+		mp.df = if (is.null(n.cores)) {
+			do.call(rbind,lapply(mp.scan,function(x) {
+				data.frame(
+					entrezgene_id = gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\2',x),
+					external_gene_name = gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\1',x),
+					mp_id = unlist(strsplit(gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\3',x),', '))
+				)
+			}))
+		} else {
+			do.call(rbind,parallel::mclapply(mp.scan,function(x) {
+				data.frame(
+					entrezgene_id = gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\2',x),
+					external_gene_name = gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\1',x),
+					mp_id = unlist(strsplit(gsub('(.*?)\\t([0-9]+?)\\t.*?\\t.*?\\t(.*)','\\3',x),', '))
+				)
+			},mc.cores=n.cores))
+		}
+		
+		ens.genes = biomaRt::getBM(
+			attributes=c('ensembl_gene_id','external_gene_name','entrezgene_id'),
+			mart = ens)
+		
+		entrez.to.ens = subset(ens.genes,!is.na(entrezgene_id))$ensembl_gene_id
+		names(entrez.to.ens) = subset(ens.genes,!is.na(entrezgene_id))$entrezgene_id
+		
+		mp.df$ensembl_gene_id = entrez.to.ens[mp.df$entrezgene_id]
+		
+		unmatched.symbols = unique(subset(mp.df,is.na(ensembl_gene_id))$external_gene_name)
+		
+		if (length(unmatched.symbols)) {
+			warning(length(unmatched.symbols),' unmatched symbols detected. Attempting to match to Ensembl IDs based on symbol.')
+			ens.symbols = subset(ens.genes,external_gene_name %in% unmatched.symbols)
+		
+			symbol.counts = table(ens.symbols$external_gene_name)
+			
+			good.symbols = names(which(symbol.counts == 1))
+			
+			ens.symbols = subset(ens.symbols,external_gene_name %in% good.symbols)
+			
+			names.to.ens = ens.symbols$ensembl_gene_id
+			names(names.to.ens) = ens.symbols$external_gene_name
+			
+			mp.df$ensembl_gene_id = with(mp.df,ifelse(
+				!is.na(ensembl_gene_id),
+				ensembl_gene_id,
+				names.to.ens[external_gene_name]
+			))
+			
+			warning(length(good.symbols),' unique gene symbols kept and successfully matched.')
+		}
+		if (length(unique(subset(mp.df,is.na(ensembl_gene_id))$external_gene_name))) {
+			warning(length(unique(subset(mp.df,is.na(ensembl_gene_id))$external_gene_name)),' genes discarded due to inability to match Ensembl IDs.')
+		}
+		mp.df = subset(mp.df,!is.na(ensembl_gene_id))
+		
+		mp.info = unique(mp.df['mp_id'])
+
+		temp.file = tempfile()
+		download.file('https://www.informatics.jax.org/downloads/reports/VOC_MammalianPhenotype.rpt',temp.file,quiet=TRUE,timeout=600)
+		
+		mp.names = scan(temp.file,sep='\n',what='',quiet=TRUE)
+		
+		mp.names.df = data.frame(
+			mp_id = gsub('^(MP:[0-9]{7})\\t(.*)','\\1',mp.names),
+			mp_string = gsub('^(MP:[0-9]{7})\\t(.*)','\\2',mp.names)
+		)
+		mp.names.df = subset(mp.names.df,mp_id %in% mp.df$mp_id)
+		
+		mp.names.df$mp_name = gsub('^(.+?)\\t(.+)','\\1',mp.names.df$mp_string)
+		mp.names.df$mp_definition = gsub('^(.+?)\\t(.+)','\\2',mp.names.df$mp_string)
+		
+		mp.names.df$mp_string = NULL
+		
+		mp.info = mp.names.df
+		names(mp.info) = c('pathway_id','pathway_name','pathway_definition')
+		
+		gene2mp = if (is.null(n.cores)) {
+			lapply(split(mp.df,mp.df$ensembl_gene_id),function(x) unique(x$mp_id))
+		} else {
+			parallel::mclapply(split(mp.df,mp.df$ensembl_gene_id),function(x) unique(x$mp_id),mc.cores=n.cores)
+		}
+		
+		rownames(mp.info) = NULL
+		result = createPathwayAnnotationObject(
+			database = database,
+			organism = ensembl.species,
+			annotation = gene2mp,
+			definition = mp.info,
+			ensembl.version = ensembl.version,
+			annotation.version = mp.version
 		)
 	} else if (toupper(database) == 'PANTHER') {
 		database = 'PANTHER'
