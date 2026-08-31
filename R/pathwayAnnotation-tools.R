@@ -782,7 +782,7 @@ fetchAnnotations = function(
 		
 		# ChEBI
 		temp.file = tempfile()
-		download.file('https://ftp.ebi.ac.uk/pub/databases/chebi/Flat_file_tab_delimited/compounds.tsv.gz',temp.file,quiet=TRUE,timeout=600)
+		download.file('https://ftp.ebi.ac.uk/pub/databases/chebi/flat_files/compounds.tsv.gz',temp.file,quiet=TRUE,timeout=600)
 		file.rename(temp.file,paste0(temp.file,'txt.gz'))
 		temp.file=paste0(temp.file,'txt.gz')
 		
