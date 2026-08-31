@@ -141,8 +141,8 @@ fetchAnnotations = function(
 	database = database[1]
 	# if (!is.null(n.cores)) suppressPackageStartupMessages(require(parallel))
 	
-	if (!toupper(database) %in% c('GO','KEGG','PANTHER','REACTOME','REACTOMEPPI','DISEASES','DISGENET','IID')) {
-		stop('Argument database must be one of c("GO","KEGG","PANTHER","Reactome","ReactomePPI","DISEASES","DisGeNET","IID")')
+	if (!toupper(database) %in% c('GO','KEGG','PANTHER','REACTOME','REACTOMEPPI','DISEASES','DISGENET','IID','MP')) {
+		stop('Argument database must be one of c("GO","KEGG","PANTHER","Reactome","ReactomePPI","DISEASES","DisGeNET","IID","MP")')
 	}
 	
 	if (toupper(database) == 'GO') {
